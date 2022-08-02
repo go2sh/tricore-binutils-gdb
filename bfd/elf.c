@@ -5490,7 +5490,6 @@ _bfd_elf_map_sections_to_segments (bfd *abfd,
 
 	  *pm = m;
 	  pm = &m->next;
-
 	  if ((hdr->flags & SEC_READONLY) == 0)
 	    writable = true;
 	  else
@@ -8525,6 +8524,7 @@ _bfd_elf_init_private_section_data (bfd *ibfd,
   if (ibfd->xvec->flavour != bfd_target_elf_flavour
       || obfd->xvec->flavour != bfd_target_elf_flavour)
     return true;
+
 
   BFD_ASSERT (elf_section_data (osec) != NULL);
 
