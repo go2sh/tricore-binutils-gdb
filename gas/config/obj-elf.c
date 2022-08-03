@@ -65,6 +65,10 @@
 #include "elf/pru.h"
 #endif
 
+#ifdef TC_TRICORE
+#include "elf/tricore.h"
+#endif
+
 static void obj_elf_line (int);
 static void obj_elf_size (int);
 static void obj_elf_type (int);
@@ -931,6 +935,7 @@ static bfd_vma
 obj_elf_parse_section_letters (char *str, size_t len,
 			       bool *is_clone, int *inherit, bfd_vma *gnu_attr)
 {
+  int core = -1;
   bfd_vma attr = 0;
 
   *is_clone = false;
@@ -978,6 +983,24 @@ obj_elf_parse_section_letters (char *str, size_t len,
 	case 'T':
 	  attr |= SHF_TLS;
 	  break;
+	case 'c':
+           if ((len > 1) && (ISDIGIT(str[1])))
+           {
+             core = str[1] - 0x30 + 1;
+             str++; len--;
+           }
+           if (len > 1 && str[1] == 'g')
+           {
+             core = 0;
+             str++; len--;
+           }
+           if (core < 0)
+           {
+              as_fatal(_("invalid syntax in section flags"));
+              core = 0;
+            }
+            attr |= SHF_CORE_NUMBER(core);
+            break;
 	case 'd':
 	  *gnu_attr |= SHF_GNU_MBIND;
 	  break;
