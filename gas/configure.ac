@@ -497,6 +497,10 @@ changequote([,])dnl
 	esac
 	;;
 
+      mcs)
+	using_cgen=yes
+	;;
+
       mep)
 	using_cgen=yes
 	;;

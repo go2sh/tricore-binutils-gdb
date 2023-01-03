@@ -249,6 +249,7 @@ ALL_EMULATION_SOURCES = \
 	eelf32mb_linux.c \
 	eelf32mbel_linux.c \
 	eelf32mcore.c \
+	eelf32mcs.c \
 	eelf32mep.c \
 	eelf32metag.c \
 	eelf32microblaze.c \
