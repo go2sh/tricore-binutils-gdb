@@ -469,6 +469,7 @@ enum option_values
   OPTION_NO_LITERAL_MOVEMENT,
   OPTION_ABI_WINDOWED,
   OPTION_ABI_CALL0,
+  OPTION_EXT_MAP,
 };
 
 /* The initial parser states.  */
