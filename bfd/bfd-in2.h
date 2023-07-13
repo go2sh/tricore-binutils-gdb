@@ -7320,6 +7320,15 @@ enum bfd_reloc_code_real
   BFD_RELOC_TRICORE_10SM,
   BFD_RELOC_TRICORE_15REL,
 
+  /* These are relocation types defined for TriCore's PCP co-processor.  */
+  BFD_RELOC_TRICORE_PCPHI,
+  BFD_RELOC_TRICORE_PCPLO,
+  BFD_RELOC_TRICORE_PCPPAGE,
+  BFD_RELOC_TRICORE_PCPOFF,
+  BFD_RELOC_TRICORE_PCPTEXT,
+  BFD_RELOC_TRICORE_PCPREL6,
+  BFD_RELOC_TRICORE_PCPREL10,
+
   /* These are GNU extensions of TriCore relocations, which allow
    * to relocate all non-register operands.  */
   BFD_RELOC_TRICORE_HI,
@@ -7398,6 +7407,10 @@ enum bfd_reloc_code_real
 
   /* This supports 32-bit absolute address with low 14-bit zero  */
   BFD_RELOC_TRICORE_18ABS_14,
+
+  /* This supports Tricore relaxation  */
+  BFD_RELOC_TRICORE_RELAX,
+
 
   /* Linux eBPF relocations.  */
   BFD_RELOC_BPF_64,
