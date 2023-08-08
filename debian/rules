@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+
+include /usr/share/dpkg/pkg-info.mk
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+
+target=tricore-elf
+
+package=binutils-tricore-elf
+TOP_DIR=$(shell pwd)
+BINUTILS_BUILD_DIR=$(TOP_DIR)/build
+BINUTILS_SOURCE_DIR=$(TOP_DIR)
+BINUTILS_DEB_TMP_DIR=$(TOP_DIR)/debian/$(PACKAGE_BINUTILS)-tmp
+
+buildflags=$(shell dpkg-buildflags --export=configure)
+
+configure_flags = \
+	--target=$(target) \
+	--prefix=/usr/lib \
+	--bindir=/usr/bin \
+	--libdir=/usr/lib/tricore-elf \
+	--infodir=/usr/share/doc/$(package)/info \
+	--htmldir=/usr/share/doc/$(package)/html \
+	--pdfdir=/usr/share/doc/$(package)/pdf \
+	--mandir=/usr/share/man \
+	--disable-nls \
+	--disable-werror \
+	--enable-plugins \
+	--enable-interwork \
+	--with-system-zlib \
+	"--with-pkgversion=$(deb_version)" \
+	--enable-deterministic-archives \
+	--disable-warn-rwx-segments \
+	$(buildflags)
+
+%:
+	dh $@ -D$(BINUTILS_SOURCE_DIR) -B$(BINUTILS_BUILD_DIR) --parallel --with autoreconf
+
+override_dh_update_autotools_config:
+override_dh_autoreconf:
+#	autoreconf2.69 -f $(BINUTILS_SOURCE_DIR)
+
+override_dh_auto_configure: 
+	dh_auto_configure -D$(BINUTILS_SOURCE_DIR) -B$(BINUTILS_BUILD_DIR) -- $(configure_flags)
+
+override_dh_clean:
+	rm -rf $(BINUTILS_BUILD_DIR)
+	rm -rf $(BINUTILS_DEB_TMP_DIR) $(BINUTILS_SOURCE_DEB_TMP_DIR)
+	rm -rf 32 x32
+	dh_clean
+
+override_dh_install:
+	dh_install -p$(PACKAGE_BINUTILS) --sourcedir $(BINUTILS_DEB_TMP_DIR)
+	mkdir -p $(BINUTILS_SOURCE_DEB_TMP_DIR)/usr/src
+	tar --exclude=build --exclude=.git --exclude=debian --exclude=autom4te.cache --sort=name --mtime="@$(SOURCE_DATE_EPOCH)" --owner=0 --group=0 --numeric-owner --mode=0755 -C $(TOP_DIR) -c -f - . | xz -T0 > $(BINUTILS_SOURCE_DEB_TMP_DIR)/usr/src/$(PACKAGE_BINUTILS_SOURCE).tar.xz
+	dh_install -p$(PACKAGE_BINUTILS_SOURCE) --sourcedir $(BINUTILS_SOURCE_DEB_TMP_DIR)
+
+override_dh_auto_install:
+	$(MAKE) install -C$(BINUTILS_BUILD_DIR) DESTDIR=$(BINUTILS_DEB_TMP_DIR)
+
+override_dh_auto_test:
+	@echo "no testing, that's way too painful"
+
