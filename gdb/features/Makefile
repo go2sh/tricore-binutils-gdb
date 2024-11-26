@@ -88,6 +88,7 @@ s390-tevx-linux64-expedite = r14l,r15l,pswa
 s390-gs-linux64-expedite = r14,r15,pswa
 s390x-expedite = r14,r15,pswa
 tic6x-expedite = A15,PC
+tricore-expedite = a10,pc,pcx
 
 
 XSLTPROC = xsltproc
@@ -168,6 +169,7 @@ XMLTOC = \
 	s390x-gs-linux64.xml \
 	sparc/sparc32-solaris.xml \
 	sparc/sparc64-solaris.xml \
+	tricore.xml \
 	z80.xml
 
 TDESC_CFILES = $(patsubst %.xml,%.c,$(XMLTOC))
