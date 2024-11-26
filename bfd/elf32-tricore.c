@@ -2190,14 +2190,12 @@ TOCHECK
 void
 tricore_elf32_do_export_symbols(struct bfd_link_info *info ATTRIBUTE_UNUSED)
 {
-#if 0
-TOCHECK	
-  if (tricore_elf32_export_symbols)
+  /* TODO: Check*/
+  if (0 && tricore_elf32_export_symbols)
   {
     /* Add export symbols.  */
     bfd_link_hash_traverse (info->hash, tricore_elf32_export_add_sym, (void *) info);
   }
-#endif
 }
 
 /*
@@ -2769,7 +2767,7 @@ tricore_elf32_relocate_section (bfd *output_bfd,
   Elf_Internal_Sym *sym;
   Elf_Internal_Rela *rel, *relend;
   bfd *dynobj = elf_hash_table (info)->dynobj;
-  bfd_vma got_base = 0, got_ptr = 0, sda_base, addend, offset, relocation;
+  bfd_vma got_base = 0, got_ptr = 0, sda_base, addend, offset, relocation = 0;
   bfd_reloc_status_type r;
   bfd_byte *byte_ptr = NULL;
   asection *sreloc = NULL, *sec;
@@ -11712,7 +11710,7 @@ tricore_elf32_relax_delete_bytes(bfd *abfd, asection *sec, bfd_byte *contents, E
 #define elf_backend_special_sections 		tricore_elf32_special_sections
 
 /* Now #define all necessary stuff to describe this target.  */
-// TOCHECK #define bfd_elf32_bfd_link_hash_table_create tricore_elf32_link_hash_table_create
+#define bfd_elf32_bfd_link_hash_table_create tricore_elf32_link_hash_table_create
 
 
 // #define USE_RELA			1
