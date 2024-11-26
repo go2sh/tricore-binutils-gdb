@@ -1729,6 +1729,8 @@ pcp_init_word (flag)
 
 /* This is the callback function for the .bit/.lbit pseudo opcodes.  */
 
+#pragma GCC diagnostic ignored "-Wstack-usage="
+
 static void
 create_bit (int global)
 {
@@ -1943,6 +1945,7 @@ create_bit (int global)
         printf ("%d,<%s>\n", val, sname);
     }
 }
+#pragma GCC diagnostic pop
 
 /* This is the callback function for .bpos and friends.  */
 
@@ -8065,7 +8068,7 @@ void
 md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
 {
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
-  unsigned long opcode;
+  unsigned long opcode = 0;
   enum bfd_reloc_code_real reloc = fixP->fx_r_type;
   long val;
   int len32;
