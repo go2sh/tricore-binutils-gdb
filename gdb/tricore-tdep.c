@@ -140,33 +140,52 @@ tricore_frame_cache (frame_info_ptr this_frame, void **this_cache)
   (*this_cache) = cache;
 
   cache->pcx = get_frame_register_unsigned (this_frame, TRICORE_PCX_REGNUM);
-
-#if 0
-  /* The prologue scanner sets the address of registers stored to the stack
-     as the offset of that register from the frame base.  The prologue
-     scanner doesn't know the actual frame base value, and so is unable to
-     compute the exact address.  We do now know the frame base value, so
-     update the address of registers stored to the stack.  */
-  numregs = gdbarch_num_regs (gdbarch) + gdbarch_num_pseudo_regs (gdbarch);
-  for (regno = 0; regno < numregs; ++regno)
+  if (!cache->pcx)
     {
-      if (cache->regs[regno].is_addr ())
-        cache->regs[regno].set_addr (cache->regs[regno].addr ()
-                                     + cache->frame_base);
+      return cache;
     }
+  CORE_ADDR context
+      = ((cache->pcx & 0xF0000) << 12) | ((cache->pcx & 0xFFFF) << 6);
 
-  /* The previous $pc can be found wherever the $ra value can be found.
-     The previous $ra value is gone, this would have been stored be the
-     previous frame if required.  */
-  cache->regs[gdbarch_pc_regnum (gdbarch)] = cache->regs[RISCV_RA_REGNUM];
-  cache->regs[RISCV_RA_REGNUM].set_unknown ();
-
-  /* Build the frame id.  */
-  cache->this_id = frame_id_build (cache->frame_base, start_addr);
-
-  /* The previous $sp value is the frame base value.  */
-  cache->regs[gdbarch_sp_regnum (gdbarch)].set_value (cache->frame_base);
-#endif
+  cache->regs[TRICORE_PC_REGNUM].set_realreg (TRICORE_A11_REGNUM);
+  if (cache->pcx & 0x100000)
+    {
+      cache->regs[TRICORE_PCX_REGNUM].set_addr (context);
+      cache->regs[TRICORE_PSW_REGNUM].set_addr (context + 0x4);
+      cache->regs[TRICORE_A10_REGNUM].set_addr (context + 0x8);
+      cache->regs[TRICORE_A11_REGNUM].set_addr (context + 0xC);
+      cache->regs[TRICORE_D8_REGNUM].set_addr (context + 0x10);
+      cache->regs[TRICORE_D9_REGNUM].set_addr (context + 0x14);
+      cache->regs[TRICORE_D10_REGNUM].set_addr (context + 0x18);
+      cache->regs[TRICORE_D11_REGNUM].set_addr (context + 0x1C);
+      cache->regs[TRICORE_A12_REGNUM].set_addr (context + 0x20);
+      cache->regs[TRICORE_A13_REGNUM].set_addr (context + 0x24);
+      cache->regs[TRICORE_A14_REGNUM].set_addr (context + 0x28);
+      cache->regs[TRICORE_A15_REGNUM].set_addr (context + 0x2C);
+      cache->regs[TRICORE_D12_REGNUM].set_addr (context + 0x30);
+      cache->regs[TRICORE_D13_REGNUM].set_addr (context + 0x34);
+      cache->regs[TRICORE_D14_REGNUM].set_addr (context + 0x38);
+      cache->regs[TRICORE_D15_REGNUM].set_addr (context + 0x3C);
+    }
+  else
+    {
+      cache->regs[TRICORE_PCX_REGNUM].set_addr (context);
+      cache->regs[TRICORE_A11_REGNUM].set_addr (context + 0x4);
+      cache->regs[TRICORE_A2_REGNUM].set_addr (context + 0x8);
+      cache->regs[TRICORE_A3_REGNUM].set_addr (context + 0xC);
+      cache->regs[TRICORE_D0_REGNUM].set_addr (context + 0x10);
+      cache->regs[TRICORE_D1_REGNUM].set_addr (context + 0x14);
+      cache->regs[TRICORE_D2_REGNUM].set_addr (context + 0x18);
+      cache->regs[TRICORE_D3_REGNUM].set_addr (context + 0x1C);
+      cache->regs[TRICORE_A4_REGNUM].set_addr (context + 0x20);
+      cache->regs[TRICORE_A5_REGNUM].set_addr (context + 0x24);
+      cache->regs[TRICORE_A6_REGNUM].set_addr (context + 0x28);
+      cache->regs[TRICORE_A7_REGNUM].set_addr (context + 0x2C);
+      cache->regs[TRICORE_D4_REGNUM].set_addr (context + 0x30);
+      cache->regs[TRICORE_D5_REGNUM].set_addr (context + 0x34);
+      cache->regs[TRICORE_D6_REGNUM].set_addr (context + 0x38);
+      cache->regs[TRICORE_D7_REGNUM].set_addr (context + 0x3C);
+    }
   return cache;
 }
 
@@ -174,20 +193,27 @@ static void
 tricore_frame_this_id (frame_info_ptr this_frame, void **this_cache,
                        struct frame_id *this_id)
 {
+  struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct tricore_unwind_cache *cache
       = tricore_frame_cache (this_frame, this_cache);
 
   if (cache->pcx == 0)
     return;
 
+  CORE_ADDR code_addr = get_frame_func (this_frame);
+  if (code_addr == 0)
+    code_addr = get_frame_register_unsigned (this_frame,
+                                             gdbarch_pc_regnum (gdbarch));
+
   (*this_id)
-      = frame_id_build_special (cache->frame_ptr, cache->pcx, cache->pcx);
+      = frame_id_build_special (cache->frame_ptr, code_addr, cache->pcx);
 }
 
 static struct value *
 tricore_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
                              int prev_regnum)
 {
+  // struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct tricore_unwind_cache *cache
       = tricore_frame_cache (this_frame, this_cache);
 
@@ -375,6 +401,8 @@ tricore_gnu_triplet_regexp (struct gdbarch *gdbarch)
   return "tricore";
 }
 
+static char *tricore_disassembler_options = NULL;
+
 /* Initialize the current architecture based on INFO.  If possible,
    re-use an architecture from ARCHES, which is a list of
    architectures already created during this debugging session.
@@ -453,7 +481,8 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   /* Frame unwinders.  Use DWARF debug info if available, otherwise use our own
      unwinder.  */
-  dwarf2_append_unwinders (gdbarch);
+  /* Dwarf info is not reliable with current compilers. */
+  // dwarf2_append_unwinders (gdbarch);
   frame_unwind_append_unwinder (gdbarch, &tricore_frame_unwind);
 
   /* Register architecture.  */
@@ -498,9 +527,10 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_gnu_triplet_regexp (gdbarch, tricore_gnu_triplet_regexp);
 
   /* Disassembler options support.  */
+  set_gdbarch_disassembler_options (gdbarch, &tricore_disassembler_options);
+  /* Not needed currently */
   // set_gdbarch_valid_disassembler_options(gdbarch,
-  // disassembler_options_riscv()); set_gdbarch_disassembler_options(gdbarch,
-  // &riscv_disassembler_options);
+  // disassembler_options_tricore());
 
 #if 0
   /* SystemTap Support.  */
