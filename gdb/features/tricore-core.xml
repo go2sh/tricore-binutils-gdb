@@ -39,7 +39,16 @@
   <reg name="a13" bitsize="32" type="data_ptr"/>
   <reg name="a14" bitsize="32" type="data_ptr"/>
   <reg name="a15" bitsize="32" type="data_ptr"/>
+  <reg name="lcx" bitsize="32"/>
+  <reg name="fcx" bitsize="32"/>
   <reg name="pcx" bitsize="32" type="uint32"/>
   <reg name="psw" bitsize="32" type="uint32"/> 
   <reg name="pc" bitsize="32" type="code_ptr"/>
+  <reg name="icr" bitsize="32"/>
+  <reg name="isp" bitsize="32"/>
+  <reg name="btv" bitsize="32" type="code_ptr"/>
+  <reg name="biv" bitsize="32" type="code_ptr"/>
+  <reg name="syscon" bitsize="32"/>
+  <reg name="pcon0" bitsize="32"/>
+  <reg name="dcon0" bitsize="32"/>
 </feature>
