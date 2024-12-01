@@ -314,13 +314,14 @@ tricore_pseudo_register_write (struct gdbarch *gdbarch,
   regcache->raw_write_part (realnum + 1, 0, 4, buf + 4);
 }
 
-static const char *const tricore_register_names[] = {
-  "d0",  "d1",  "d2",  "d3",  "d4",  "d5",  "d6",  "d7",  "d8", "d9",
-  "d10", "d11", "d12", "d13", "d14", "d15",
+static const char *const tricore_register_names[]
+    = { "d0",  "d1",     "d2",    "d3",   "d4",  "d5",  "d6",  "d7",
+        "d8",  "d9",     "d10",   "d11",  "d12", "d13", "d14", "d15",
 
-  "a0",  "a1",  "a2",  "a3",  "a4",  "a5",  "a6",  "a7",  "a8", "a9",
-  "a10", "a11", "a12", "a13", "a14", "a15", "pcx", "psw", "pc",
-};
+        "a0",  "a1",     "a2",    "a3",   "a4",  "a5",  "a6",  "a7",
+        "a8",  "a9",     "a10",   "a11",  "a12", "a13", "a14", "a15",
+        "lcx", "fcx",    "pcx",   "psw",  "pc",  "icr", "isp", "btv",
+        "biv", "syscon", "pcon0", "dcon0" };
 
 static struct type *
 tricore_register_type (struct gdbarch *gdbarch, int regnum)
@@ -328,16 +329,26 @@ tricore_register_type (struct gdbarch *gdbarch, int regnum)
   if (tdesc_has_registers (gdbarch_target_desc (gdbarch)))
     return tdesc_register_type (gdbarch, regnum);
 
-  if (regnum == TRICORE_PSW_REGNUM || regnum == TRICORE_PCX_REGNUM)
-    return builtin_type (gdbarch)->builtin_uint32;
-  if (regnum == TRICORE_PC_REGNUM)
-    return builtin_type (gdbarch)->builtin_func_ptr;
-  if (regnum >= TRICORE_A0_REGNUM && regnum <= TRICORE_A15_REGNUM)
-    return builtin_type (gdbarch)->builtin_data_ptr;
+  switch (regnum)
+    {
+    case TRICORE_D0_REGNUM ... TRICORE_D15_REGNUM:
+      return builtin_type (gdbarch)->builtin_int;
+    case TRICORE_A0_REGNUM ... TRICORE_A15_REGNUM:
+      return builtin_type (gdbarch)->builtin_data_ptr;
+    case TRICORE_PSW_REGNUM:
+    case TRICORE_PCX_REGNUM:
+      return builtin_type (gdbarch)->builtin_uint32;
+    case TRICORE_PC_REGNUM:
+    case TRICORE_BIV_REGNUM:
+    case TRICORE_BTV_REGNUM:
+      return builtin_type (gdbarch)->builtin_func_ptr;
+    default:
+      break;
+    }
   if (regnum >= gdbarch_num_regs (gdbarch))
     return tricore_pseudo_register_type (gdbarch, regnum);
 
-  return builtin_type (gdbarch)->builtin_int32;
+  return builtin_type (gdbarch)->builtin_int;
 }
 
 static const char *
