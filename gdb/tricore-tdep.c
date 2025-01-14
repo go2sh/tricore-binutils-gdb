@@ -14,6 +14,7 @@
 #include "target-descriptions.h"
 #include "trad-frame.h"
 #include <cassert>
+#include <cstddef>
 
 #include "features/tricore.c"
 #include "tricore-tdep.h"
@@ -190,7 +191,7 @@ tricore_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-tricore_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+tricore_frame_this_id (const frame_info_ptr &this_frame, void **this_cache,
                        struct frame_id *this_id)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -210,8 +211,8 @@ tricore_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-tricore_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
-                             int prev_regnum)
+tricore_frame_prev_register (const frame_info_ptr &this_frame,
+                             void **this_cache, int prev_regnum)
 {
   // struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct tricore_unwind_cache *cache
@@ -310,34 +311,40 @@ tricore_pseudo_register_read (struct gdbarch *gdbarch,
   int realnum
       = regnum < TRICORE_P0_REGNUM ? TRICORE_D0_REGNUM : TRICORE_A0_REGNUM;
 
-  gdb_byte reg0[4], reg1[4];
-  memset (buf, 0, register_size (gdbarch, regnum));
-  enum register_status status = regcache->raw_read_part (realnum, 0, 4, reg0);
+  size_t reg_size = register_size (gdbarch, realnum);
+  gdb_byte reg[reg_size];
+  gdb::array_view<gdb_byte> reg_view (reg, reg_size);
+  gdb::array_view<gdb_byte> buf_view (buf, register_size (gdbarch, regnum));
 
+  enum register_status status = regcache->raw_read (realnum, reg_view);
   if (status != REG_VALID)
     return status;
-  status = regcache->raw_read_part (realnum + 1, 0, 4, reg1);
+  copy (reg_view, buf_view.slice (0, 4));
 
+  status = regcache->raw_read (realnum + 1, reg_view);
   if (status != REG_VALID)
     return status;
-
-  memcpy (buf, reg0, 4);
-  memcpy (buf + 4, reg1, 4);
+  copy (reg_view, buf_view.slice (4, 8));
 
   return REG_VALID;
 }
 
 static void
 tricore_pseudo_register_write (struct gdbarch *gdbarch,
-                               struct regcache *regcache, int regnum,
-                               const gdb_byte *buf)
+                               const frame_info_ptr &next_frame,
+                               int pseudo_reg_num,
+                               gdb::array_view<const gdb_byte> buf)
 {
-  regnum -= gdbarch_num_regs (gdbarch);
-  int realnum
-      = regnum < TRICORE_P0_REGNUM ? TRICORE_D0_REGNUM : TRICORE_A0_REGNUM;
+  int realnum = pseudo_reg_num < TRICORE_P0_REGNUM ? TRICORE_D0_REGNUM
+                                                   : TRICORE_A0_REGNUM;
+  size_t raw_buf_size = register_size (gdbarch, realnum);
+  gdb_byte raw_buf[raw_buf_size];
+  gdb::array_view<gdb_byte> raw_view (raw_buf, raw_buf_size);
 
-  regcache->raw_write_part (realnum, 0, 4, buf);
-  regcache->raw_write_part (realnum + 1, 0, 4, buf + 4);
+  copy (buf.slice (0, 4), raw_view);
+  put_frame_register (next_frame, realnum, raw_view);
+  copy (buf.slice (4, 8), raw_view);
+  put_frame_register (next_frame, realnum + 1, raw_view);
 }
 
 static const char *const tricore_register_names[]
@@ -401,7 +408,47 @@ tricore_gnu_triplet_regexp (struct gdbarch *gdbarch)
   return "tricore";
 }
 
-static char *tricore_disassembler_options = NULL;
+static std::string tricore_disassembler_options = "";
+
+/* Initialize target description for the ARC.
+
+   Returns true if input TDESC was valid and in this case it will assign TDESC
+   and TDESC_DATA output parameters.  */
+
+static bool
+tricore_tdesc_init (struct gdbarch_info info, const struct target_desc **tdesc,
+                    tdesc_arch_data_up *tdesc_data)
+{
+  const struct target_desc *tdesc_temp = info.target_desc;
+
+  /* Check any target description for validity.  */
+  if (!tdesc_has_registers (tdesc_temp))
+    {
+      return false;
+    }
+
+  const struct tdesc_feature *feature;
+  int valid_p;
+  int i;
+
+  feature = tdesc_find_feature (tdesc_temp, "org.gnu.gdb.tricore.core");
+  if (feature == NULL)
+    return false;
+  tdesc_arch_data_up tdesc_data_loc = tdesc_data_alloc ();
+
+  valid_p = 1;
+  for (i = 0; i < TRICORE_NUM_REGS; i++)
+    valid_p &= tdesc_numbered_register (feature, tdesc_data_loc.get (), i,
+                                        tricore_register_names[i]);
+
+  if (!valid_p)
+    return false;
+
+  *tdesc = tdesc_temp;
+  *tdesc_data = std::move (tdesc_data_loc);
+
+  return true;
+}
 
 /* Initialize the current architecture based on INFO.  If possible,
    re-use an architecture from ARCHES, which is a list of
@@ -413,40 +460,14 @@ static struct gdbarch *
 tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   tdesc_arch_data_up tdesc_data;
-  const struct target_desc *tdesc = info.target_desc;
+  const struct target_desc *tdesc;
 
-  /* If there is already a candidate, use it.  */
-  arches = gdbarch_list_lookup_by_info (arches, &info);
-  if (arches != NULL)
-    return arches->gdbarch;
-  if (tdesc == NULL)
-    tdesc = tdesc_tricore;
-
-  /* Check any target description for validity.  */
-  if (tdesc_has_registers (tdesc))
-    {
-      const struct tdesc_feature *feature;
-      int valid_p;
-      int i;
-
-      feature = tdesc_find_feature (tdesc, "org.gnu.gdb.tricore.core");
-      if (feature == NULL)
-        return NULL;
-      tdesc_data = tdesc_data_alloc ();
-
-      valid_p = 1;
-      for (i = 0; i < TRICORE_NUM_REGS; i++)
-        valid_p &= tdesc_numbered_register (feature, tdesc_data.get (), i,
-                                            tricore_register_names[i]);
-
-      if (!valid_p)
-        return NULL;
-    }
+  if (!tricore_tdesc_init (info, &tdesc, &tdesc_data))
+    return nullptr;
 
   gdbarch *gdbarch
       = gdbarch_alloc (&info, gdbarch_tdep_up (new tricore_gdbarch_tdep));
   // tricore_gdbarch_tdep *tdep = gdbarch_tdep<tricore_gdbarch_tdep>(gdbarch);
-  // const struct target_desc *tdesc = info.target_desc;
 
   /* Target data types.  */
   set_gdbarch_short_bit (gdbarch, 16);
@@ -460,6 +481,11 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_ptr_bit (gdbarch, 32);
   set_gdbarch_char_signed (gdbarch, 1);
   set_gdbarch_type_align (gdbarch, tricore_type_align);
+
+  set_gdbarch_num_regs (gdbarch, TRICORE_NUM_REGS);
+  set_gdbarch_num_pseudo_regs (gdbarch, TRICORE_PSEUDO_NUM);
+  set_gdbarch_sp_regnum (gdbarch, TRICORE_A10_REGNUM);
+  set_gdbarch_pc_regnum (gdbarch, TRICORE_PC_REGNUM);
 
   /* Information about the target architecture.  */
   set_gdbarch_return_value_as_value (gdbarch, tricore_return_value);
@@ -484,24 +510,15 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   /* Dwarf info is not reliable with current compilers. */
   // dwarf2_append_unwinders (gdbarch);
   frame_unwind_append_unwinder (gdbarch, &tricore_frame_unwind);
-
-  /* Register architecture.  */
-  // riscv_add_reggroups(gdbarch);
-
   /* Internal <-> external register number maps.  */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, tricore_dwarf_reg_to_regnum);
 
-  /* We reserve all possible register numbers for the known registers.
-     This means the target description mechanism will add any target
-     specific registers after this number.  This helps make debugging GDB
-     just a little easier.  */
-  set_gdbarch_num_regs (gdbarch, TRICORE_NUM_REGS);
-
-  /* Some specific register numbers GDB likes to know about.  */
-  set_gdbarch_sp_regnum (gdbarch, TRICORE_A10_REGNUM);
-  set_gdbarch_pc_regnum (gdbarch, TRICORE_PC_REGNUM);
-
-  // set_gdbarch_print_registers_info(gdbarch, tricore_print_registers_info);
+  /* Register architecture.  */
+  set_gdbarch_register_type (gdbarch, tricore_register_type);
+  set_gdbarch_register_name (gdbarch, tricore_register_name);
+  // riscv_add_reggroups(gdbarch);
+  // set_gdbarch_cannot_store_register(gdbarch, riscv_cannot_store_register);
+  // set_gdbarch_register_reggroup_p(gdbarch, riscv_register_reggroup_p);
 
   set_tdesc_pseudo_register_name (gdbarch, tricore_pseudo_register_name);
   set_tdesc_pseudo_register_type (gdbarch, tricore_pseudo_register_type);
@@ -509,12 +526,6 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
                                         tricore_pseudo_register_reggroup_p);
   set_gdbarch_pseudo_register_read (gdbarch, tricore_pseudo_register_read);
   set_gdbarch_pseudo_register_write (gdbarch, tricore_pseudo_register_write);
-  set_gdbarch_num_pseudo_regs (gdbarch, TRICORE_PSEUDO_NUM);
-
-  set_gdbarch_register_type (gdbarch, tricore_register_type);
-  set_gdbarch_register_name (gdbarch, tricore_register_name);
-  // set_gdbarch_cannot_store_register(gdbarch, riscv_cannot_store_register);
-  // set_gdbarch_register_reggroup_p(gdbarch, riscv_register_reggroup_p);
 
   ///* Create register aliases for alternative register names.  We only
   //   create aliases for registers which were mentioned in the target
@@ -532,20 +543,10 @@ tricore_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   // set_gdbarch_valid_disassembler_options(gdbarch,
   // disassembler_options_tricore());
 
-#if 0
-  /* SystemTap Support.  */
-  set_gdbarch_stap_is_single_operand(gdbarch, riscv_stap_is_single_operand);
-  set_gdbarch_stap_register_indirection_prefixes(
-      gdbarch, stap_register_indirection_prefixes);
-  set_gdbarch_stap_register_indirection_suffixes(
-      gdbarch, stap_register_indirection_suffixes);
-#endif
-
   /* Hook in OS ABI-specific overrides, if they have been registered.  */
   gdbarch_init_osabi (info, gdbarch);
 
-  if (tdesc_data != NULL)
-    tdesc_use_registers (gdbarch, tdesc, std::move (tdesc_data));
+  tdesc_use_registers (gdbarch, tdesc, std::move (tdesc_data));
 
   return gdbarch;
 }
